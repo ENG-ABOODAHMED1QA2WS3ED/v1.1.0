@@ -115,3 +115,4 @@ python trading_assistant.py
 ## الترخيص
 هذا المشروع مرخص تحت رخصة MIT. راجع ملف LICENSE للمزيد من التفاصيل.
 
+# v1.1.0

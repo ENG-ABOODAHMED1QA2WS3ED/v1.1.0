@@ -14,7 +14,7 @@ try:
     # محاولة استيراد المكتبة الحقيقية
     from BinaryOptionsToolsV2.pocketoption import PocketOption
     from BinaryOptionsToolsV2.tracing import start_logs
-    REAL_API_AVAILABLE = True
+    REAL_API_AVAILABLE = True # تم تغيير هذا السطر لتمكين الاتصال الحقيقي
 except ImportError:
     # في حالة عدم توفر المكتبة، استخدام محاكاة
     REAL_API_AVAILABLE = False
@@ -55,7 +55,7 @@ class PocketOptionAPI:
                     logger.info("تم الاتصال بنجاح بمنصة PocketOption")
                     return True
                 else:
-                    logger.error("فشل في الاتصال - SSID غير صحيح")
+                    logger.error("فشل في الاتصال - SSID غير صحيح أو منتهي الصلاحية")
                     return False
             else:
                 # محاكاة للاختبار
@@ -70,7 +70,25 @@ class PocketOptionAPI:
         except Exception as e:
             logger.error(f"خطأ في الاتصال: {e}")
             return False
-    
+
+    def check_connection_status(self) -> bool:
+        """التحقق من حالة الاتصال الحالية"""
+        if not self.is_connected or not self.client:
+            return False
+        try:
+            # محاولة الحصول على الرصيد كاختبار للاتصال
+            balance = self.client.balance()
+            if balance is not None:
+                return True
+            else:
+                logger.warning("الاتصال غير صالح، قد يكون SSID منتهي الصلاحية.")
+                self.is_connected = False
+                return False
+        except Exception as e:
+            logger.error(f"خطأ أثناء التحقق من حالة الاتصال: {e}")
+            self.is_connected = False
+            return False
+
     def get_balance(self) -> Tuple[float, float]:
         """الحصول على رصيد الحساب (تجريبي، حقيقي)"""
         if not self.is_connected:
@@ -83,8 +101,8 @@ class PocketOptionAPI:
                 
                 # المكتبة قد ترجع رصيد واحد أو معلومات مفصلة
                 if isinstance(balance_info, dict):
-                    demo_balance = balance_info.get('demo', 0.0)
-                    live_balance = balance_info.get('live', 0.0)
+                    demo_balance = balance_info.get("demo", 0.0)
+                    live_balance = balance_info.get("live", 0.0)
                 else:
                     # إذا كان رقم واحد، نفترض أنه الرصيد التجريبي
                     demo_balance = float(balance_info) if balance_info else 0.0
@@ -122,7 +140,7 @@ class PocketOptionAPI:
                     "AUDNZD_otc", "CADCHF_otc", "CADJPY_otc", "CHFJPY_otc",
                     "EURAUD_otc", "EURCAD_otc", "EURNZD_otc", "GBPAUD_otc",
                     "GBPCAD_otc", "GBPCHF_otc", "GBPNZD_otc", "NZDCAD_otc",
-                    "NZDCHF_otc", "NZDJPY_otc"
+                    "NZDCHF", "NZDJPY"
                 ]
             else:
                 return [
@@ -154,11 +172,11 @@ class PocketOptionAPI:
                     formatted_candles = []
                     for candle in candles_data:
                         formatted_candles.append({
-                            'open': float(candle.get('open', 0)),
-                            'high': float(candle.get('high', 0)),
-                            'low': float(candle.get('low', 0)),
-                            'close': float(candle.get('close', 0)),
-                            'timestamp': datetime.fromtimestamp(candle.get('timestamp', time.time()))
+                            "open": float(candle.get("open", 0)),
+                            "high": float(candle.get("high", 0)),
+                            "low": float(candle.get("low", 0)),
+                            "close": float(candle.get("close", 0)),
+                            "timestamp": datetime.fromtimestamp(candle.get("timestamp", time.time()))
                         })
                     return formatted_candles
             
@@ -206,11 +224,11 @@ class PocketOptionAPI:
                 decimals = 5
             
             candles.append({
-                'open': round(open_price, decimals),
-                'high': round(high_price, decimals),
-                'low': round(low_price, decimals),
-                'close': round(close_price, decimals),
-                'timestamp': datetime.now() - timedelta(minutes=count-i)
+                "open": round(open_price, decimals),
+                "high": round(high_price, decimals),
+                "low": round(low_price, decimals),
+                "close": round(close_price, decimals),
+                "timestamp": datetime.now() - timedelta(minutes=count-i)
             })
             
             current_price = close_price
@@ -220,12 +238,12 @@ class PocketOptionAPI:
     def get_current_price(self, asset: str) -> float:
         """الحصول على السعر الحالي"""
         candles = self.get_candles(asset, count=1)
-        return candles[-1]['close'] if candles else 0.0
+        return candles[-1]["close"] if candles else 0.0
     
     def place_trade(self, asset: str, direction: str, amount: float, duration: int) -> Dict:
         """وضع صفقة (للمراقبة فقط - لا ينفذ صفقات حقيقية)"""
         if not self.is_connected:
-            return {'success': False, 'message': 'غير متصل'}
+            return {"success": False, "message": "غير متصل"}
         
         try:
             if REAL_API_AVAILABLE and self.client:
@@ -236,25 +254,25 @@ class PocketOptionAPI:
             
             # تسجيل الصفقة المقترحة فقط
             trade_info = {
-                'asset': asset,
-                'direction': direction,
-                'amount': amount,
-                'duration': duration,
-                'timestamp': datetime.now(),
-                'price': self.get_current_price(asset)
+                "asset": asset,
+                "direction": direction,
+                "amount": amount,
+                "duration": duration,
+                "timestamp": datetime.now(),
+                "price": self.get_current_price(asset)
             }
             
             logger.info(f"صفقة مقترحة: {trade_info}")
             
             return {
-                'success': True,
-                'message': 'تم تسجيل الصفقة المقترحة',
-                'trade_info': trade_info
+                "success": True,
+                "message": "تم تسجيل الصفقة المقترحة",
+                "trade_info": trade_info
             }
             
         except Exception as e:
             logger.error(f"خطأ في وضع الصفقة: {e}")
-            return {'success': False, 'message': str(e)}
+            return {"success": False, "message": str(e)}
     
     def get_account_info(self) -> Dict:
         """الحصول على معلومات الحساب"""
@@ -265,11 +283,11 @@ class PocketOptionAPI:
             demo_balance, live_balance = self.get_balance()
             
             return {
-                'uid': 'USER_' + self.ssid[:8] if self.ssid else 'UNKNOWN',
-                'demo_balance': demo_balance,
-                'live_balance': live_balance,
-                'last_updated': datetime.now(),
-                'connection_status': 'connected' if self.is_connected else 'disconnected'
+                "uid": "USER_" + self.ssid[:8] if self.ssid else "UNKNOWN",
+                "demo_balance": demo_balance,
+                "live_balance": live_balance,
+                "last_updated": datetime.now(),
+                "connection_status": "connected" if self.is_connected else "disconnected"
             }
             
         except Exception as e:
@@ -279,7 +297,7 @@ class PocketOptionAPI:
     def disconnect(self):
         """قطع الاتصال"""
         try:
-            if self.client and hasattr(self.client, 'disconnect'):
+            if self.client and hasattr(self.client, "disconnect"):
                 self.client.disconnect()
             
             self.is_connected = False
