@@ -1262,7 +1262,8 @@ class TradingAssistantGUI:
         signal_text += f"  Timeframe: {signal.timeframe} minutes\n"
         signal_text += f"  Indicators Agreement: {signal.indicators_agreement}\n"
         signal_text += f"  Note: {signal.note}\n"
-        signal_text += f"  Time: {signal.timestamp.strftime("%Y-%m-%d %H:%M:%S")}\n"
+        signal_text += f"  Time: {signal.timestamp.strftime('%Y-%m-%d %H:%M:%S')}\n"
+
         
         self.signal_display.insert(tk.END, signal_text)
         self.signal_display.see(tk.END)

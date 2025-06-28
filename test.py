@@ -1,9 +1,3 @@
-try:
-    import tkinter as tk
-    root = tk.Tk()
-    root.title("Tkinter Test")
-    root.geometry("200x100")
-    tk.Label(root, text="Tkinter is working!").pack()
-    root.mainloop()
-except ImportError:
-    print("Tkinter is NOT installed.")
+from BinaryOptionsToolsV2.pocketoption.synchronous import PocketOption
+
+print("تم الاستيراد بنجاح!")

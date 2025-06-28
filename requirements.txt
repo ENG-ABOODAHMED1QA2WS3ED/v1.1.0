@@ -1,27 +1,15 @@
-# متطلبات مساعد تداول الخيارات الثنائية
 
-# المكتبات الأساسية
 numpy>=1.21.0
 pandas>=1.3.0
 requests>=2.25.0
 websocket-client>=1.0.0
-
-# مكتبة PocketOption (إذا كانت متوفرة)
-# binaryoptionstoolsv2==0.1.6a3
-
-# مكتبات التحليل الفني (اختيارية - للتحليل المتقدم)
-# TA-Lib>=0.4.24
-
-# مكتبات إضافية للتحليل
 scipy>=1.7.0
 matplotlib>=3.4.0
-
-# مكتبات أخرى
 python-dateutil>=2.8.0
 pytz>=2021.1
-
-# ملاحظات:
-# - tkinter مدمج مع Python ولا يحتاج تثبيت منفصل
-# - binaryoptionstoolsv2 قد يتطلب تثبيت Rust و Cargo
-# - TA-Lib قد يتطلب تثبيت مكتبات C++ إضافية على Windows
-
+PyQt6
+pandas
+scikit-learn
+finnhub-python
+numpy
+BinaryOptionsToolsV2>=0.1.7

@@ -1,338 +1,160 @@
-"""
-PocketOption API Integration
-تكامل مع واجهة برمجة تطبيقات PocketOption باستخدام BinaryOptionsToolsV2
-"""
+# pocketoption_api.py
 
-import asyncio
-import time
 import logging
-from typing import Dict, List, Optional, Tuple
-from datetime import datetime, timedelta
-import json
+from BinaryOptionsToolsV2.pocketoption import PocketOption
 
-try:
-    # محاولة استيراد المكتبة الحقيقية
-    from BinaryOptionsToolsV2.pocketoption import PocketOption
-    from BinaryOptionsToolsV2.tracing import start_logs
-    REAL_API_AVAILABLE = True # تم تغيير هذا السطر لتمكين الاتصال الحقيقي
-except ImportError:
-    # في حالة عدم توفر المكتبة، استخدام محاكاة
-    REAL_API_AVAILABLE = False
-    logging.warning("BinaryOptionsToolsV2 غير متوفرة، سيتم استخدام المحاكاة")
 
-logger = logging.getLogger(__name__)
+
+# Configure basic logging to monitor the API connection status
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 class PocketOptionAPI:
-    """واجهة برمجة تطبيقات PocketOption"""
-    
-    def __init__(self):
-        self.client = None
-        self.ssid = None
-        self.is_connected = False
-        self.account_info = {}
-        
-        # بدء نظام السجلات إذا كانت المكتبة متوفرة
-        if REAL_API_AVAILABLE:
-            try:
-                start_logs(path="logs/", level="INFO", terminal=True)
-            except Exception as e:
-                logger.warning(f"فشل في بدء نظام السجلات: {e}")
-    
-    def connect(self, ssid: str) -> bool:
-        """الاتصال بالمنصة باستخدام SSID"""
-        try:
-            self.ssid = ssid
-            
-            if REAL_API_AVAILABLE:
-                # استخدام المكتبة الحقيقية
-                self.client = PocketOption(ssid=ssid)
-                time.sleep(5)  # انتظار للاتصال
-                
-                # اختبار الاتصال بالحصول على الرصيد
-                balance = self.client.balance()
-                if balance is not None:
-                    self.is_connected = True
-                    logger.info("تم الاتصال بنجاح بمنصة PocketOption")
-                    return True
-                else:
-                    logger.error("فشل في الاتصال - SSID غير صحيح أو منتهي الصلاحية")
-                    return False
-            else:
-                # محاكاة للاختبار
-                if len(ssid) > 10:  # تحقق بسيط من صحة SSID
-                    self.is_connected = True
-                    logger.info("تم الاتصال بنجاح (محاكاة)")
-                    return True
-                else:
-                    logger.error("SSID غير صحيح")
-                    return False
-                    
-        except Exception as e:
-            logger.error(f"خطأ في الاتصال: {e}")
-            return False
+    """
+    A wrapper class for the PocketOption API using the binaryoptiontools library.
+    This class handles connection, authentication, and data retrieval.
+    """
+    def __init__(self, ssid: str):
+        """
+        Initializes the API connection using a session ID (SSID).
 
-    def check_connection_status(self) -> bool:
-        """التحقق من حالة الاتصال الحالية"""
-        if not self.is_connected or not self.client:
-            return False
-        try:
-            # محاولة الحصول على الرصيد كاختبار للاتصال
-            balance = self.client.balance()
-            if balance is not None:
-                return True
-            else:
-                logger.warning("الاتصال غير صالح، قد يكون SSID منتهي الصلاحية.")
-                self.is_connected = False
-                return False
-        except Exception as e:
-            logger.error(f"خطأ أثناء التحقق من حالة الاتصال: {e}")
-            self.is_connected = False
-            return False
+        Args:
+            ssid (str): The session ID for authenticating with PocketOption.
+        
+        Raises:
+            ConnectionError: If the connection to the API fails.
+        """
+        self.ssid = ssid
+        self.api = None
+        self._connect()
 
-    def get_balance(self) -> Tuple[float, float]:
-        """الحصول على رصيد الحساب (تجريبي، حقيقي)"""
-        if not self.is_connected:
-            return 0.0, 0.0
+    def _connect(self):
+        """
+        Establishes and verifies the connection to the PocketOption servers.
+        """
+        logging.info("Attempting to establish connection with PocketOption...")
+        self.api = PocketOption(ssid=self.ssid)
         
-        try:
-            if REAL_API_AVAILABLE and self.client:
-                # الحصول على الرصيد الحقيقي
-                balance_info = self.client.balance()
-                
-                # المكتبة قد ترجع رصيد واحد أو معلومات مفصلة
-                if isinstance(balance_info, dict):
-                    demo_balance = balance_info.get("demo", 0.0)
-                    live_balance = balance_info.get("live", 0.0)
-                else:
-                    # إذا كان رقم واحد، نفترض أنه الرصيد التجريبي
-                    demo_balance = float(balance_info) if balance_info else 0.0
-                    live_balance = 0.0
-                
-                return demo_balance, live_balance
-            else:
-                # محاكاة
-                import random
-                demo_balance = 10000.0 + random.uniform(-1000, 1000)
-                live_balance = 500.0 + random.uniform(-50, 50)
-                return demo_balance, live_balance
-                
-        except Exception as e:
-            logger.error(f"خطأ في الحصول على الرصيد: {e}")
-            return 0.0, 0.0
-    
-    def get_available_assets(self, market_type: str = "OTC") -> List[str]:
-        """الحصول على الأصول المتاحة"""
-        if not self.is_connected:
-            return []
+        # Check if the connection was successfully established
+        if not self.api.check_connect():
+            logging.error("Connection failed. The SSID may be invalid or expired, or there might be a network issue.")
+            self.api = None
+            raise ConnectionError("Failed to connect to PocketOption. Please check your SSID and network.")
         
-        try:
-            if REAL_API_AVAILABLE and self.client:
-                # يمكن إضافة دالة للحصول على الأصول المتاحة من المكتبة
-                # حالياً سنستخدم قائمة ثابتة
-                pass
-            
-            # قائمة الأصول المتاحة
-            if market_type.upper() == "OTC":
-                return [
-                    "EURUSD_otc", "GBPUSD_otc", "USDJPY_otc", "AUDUSD_otc",
-                    "USDCAD_otc", "EURGBP_otc", "EURJPY_otc", "GBPJPY_otc",
-                    "AUDCAD_otc", "NZDUSD_otc", "USDCHF_otc", "EURCHF_otc",
-                    "AUDNZD_otc", "CADCHF_otc", "CADJPY_otc", "CHFJPY_otc",
-                    "EURAUD_otc", "EURCAD_otc", "EURNZD_otc", "GBPAUD_otc",
-                    "GBPCAD_otc", "GBPCHF_otc", "GBPNZD_otc", "NZDCAD_otc",
-                    "NZDCHF", "NZDJPY"
-                ]
-            else:
-                return [
-                    "EURUSD", "GBPUSD", "USDJPY", "AUDUSD",
-                    "USDCAD", "EURGBP", "EURJPY", "GBPJPY",
-                    "AUDCAD", "NZDUSD", "USDCHF", "EURCHF",
-                    "AUDNZD", "CADCHF", "CADJPY", "CHFJPY",
-                    "EURAUD", "EURCAD", "EURNZD", "GBPAUD",
-                    "GBPCAD", "GBPCHF", "GBPNZD", "NZDCAD",
-                    "NZDCHF", "NZDJPY"
-                ]
-                
-        except Exception as e:
-            logger.error(f"خطأ في الحصول على الأصول: {e}")
-            return []
-    
-    def get_candles(self, asset: str, timeframe: int = 60, count: int = 100) -> List[Dict]:
-        """الحصول على بيانات الشموع"""
-        if not self.is_connected:
-            return []
-        
-        try:
-            if REAL_API_AVAILABLE and self.client:
-                # استخدام المكتبة الحقيقية
-                candles_data = self.client.get_candles(asset, timeframe, count)
-                
-                if candles_data:
-                    # تحويل البيانات إلى التنسيق المطلوب
-                    formatted_candles = []
-                    for candle in candles_data:
-                        formatted_candles.append({
-                            "open": float(candle.get("open", 0)),
-                            "high": float(candle.get("high", 0)),
-                            "low": float(candle.get("low", 0)),
-                            "close": float(candle.get("close", 0)),
-                            "timestamp": datetime.fromtimestamp(candle.get("timestamp", time.time()))
-                        })
-                    return formatted_candles
-            
-            # محاكاة بيانات الشموع
-            return self._generate_mock_candles(asset, count)
-            
-        except Exception as e:
-            logger.error(f"خطأ في الحصول على بيانات الشموع: {e}")
-            return self._generate_mock_candles(asset, count)
-    
-    def _generate_mock_candles(self, asset: str, count: int) -> List[Dict]:
-        """توليد بيانات شموع وهمية للاختبار"""
-        import random
-        
-        # تحديد السعر الأساسي حسب نوع الأصل
-        if "EUR" in asset and "USD" in asset:
-            base_price = 1.1000
-        elif "GBP" in asset and "USD" in asset:
-            base_price = 1.3000
-        elif "USD" in asset and "JPY" in asset:
-            base_price = 110.00
-        elif "AUD" in asset and "USD" in asset:
-            base_price = 0.7500
-        else:
-            base_price = 1.0000
-        
-        candles = []
-        current_price = base_price
-        
-        for i in range(count):
-            # توليد تغيير عشوائي في السعر
-            price_change = random.uniform(-0.01, 0.01)
-            current_price += price_change
-            
-            # توليد أسعار OHLC
-            open_price = current_price
-            close_price = open_price + random.uniform(-0.005, 0.005)
-            high_price = max(open_price, close_price) + random.uniform(0, 0.003)
-            low_price = min(open_price, close_price) - random.uniform(0, 0.003)
-            
-            # تحديد عدد المنازل العشرية حسب نوع الأصل
-            if "JPY" in asset:
-                decimals = 3
-            else:
-                decimals = 5
-            
-            candles.append({
-                "open": round(open_price, decimals),
-                "high": round(high_price, decimals),
-                "low": round(low_price, decimals),
-                "close": round(close_price, decimals),
-                "timestamp": datetime.now() - timedelta(minutes=count-i)
-            })
-            
-            current_price = close_price
-        
-        return candles
-    
-    def get_current_price(self, asset: str) -> float:
-        """الحصول على السعر الحالي"""
-        candles = self.get_candles(asset, count=1)
-        return candles[-1]["close"] if candles else 0.0
-    
-    def place_trade(self, asset: str, direction: str, amount: float, duration: int) -> Dict:
-        """وضع صفقة (للمراقبة فقط - لا ينفذ صفقات حقيقية)"""
-        if not self.is_connected:
-            return {"success": False, "message": "غير متصل"}
-        
-        try:
-            if REAL_API_AVAILABLE and self.client:
-                # يمكن استخدام المكتبة لوضع صفقات حقيقية
-                # لكن هذا التطبيق للتحليل فقط
-                logger.warning("وضع الصفقات معطل - هذا التطبيق للتحليل فقط")
-                pass
-            
-            # تسجيل الصفقة المقترحة فقط
-            trade_info = {
-                "asset": asset,
-                "direction": direction,
-                "amount": amount,
-                "duration": duration,
-                "timestamp": datetime.now(),
-                "price": self.get_current_price(asset)
-            }
-            
-            logger.info(f"صفقة مقترحة: {trade_info}")
-            
-            return {
-                "success": True,
-                "message": "تم تسجيل الصفقة المقترحة",
-                "trade_info": trade_info
-            }
-            
-        except Exception as e:
-            logger.error(f"خطأ في وضع الصفقة: {e}")
-            return {"success": False, "message": str(e)}
-    
-    def get_account_info(self) -> Dict:
-        """الحصول على معلومات الحساب"""
-        if not self.is_connected:
+        logging.info(f"Successfully connected. Account ID: {self.get_account_id()}")
+
+    def get_balance(self) -> float:
+        """
+        Retrieves the current account balance.
+
+        Returns:
+            float: The real account balance, or None if not connected.
+        """
+        if not self.api:
+            logging.warning("Cannot get balance, API not connected.")
+            return None
+        return self.api.get_balance()
+
+    def get_account_id(self) -> int:
+        """
+        Retrieves the user's account ID.
+
+        Returns:
+            int: The user's account ID, or None if not connected.
+        """
+        if not self.api:
+            logging.warning("Cannot get account ID, API not connected.")
+            return None
+        # The library often stores profile info after connection
+        return self.api.profile.id if self.api.profile else None
+
+    def get_assets(self) -> dict:
+        """
+        Fetches all available assets and categorizes them by type.
+
+        Returns:
+            dict: A dictionary where keys are asset types (crypto, commodity, otc, etc.)
+                  and values are lists of asset names.
+        """
+        if not self.api:
+            logging.warning("Cannot get assets, API not connected.")
             return {}
+
+        logging.info("Fetching all available trading assets...")
+        all_assets = self.api.get_all_asset()
         
-        try:
-            demo_balance, live_balance = self.get_balance()
+        categorized_assets = {
+            "crypto": [],
+            "commodity": [],
+            "otc": [],
+            "stock": [],
+            "currency": [],
+            "other": []
+        }
+
+        for asset_name, asset_details in all_assets.items():
+            # Check for OTC in the name first as it's a primary distinction
+            if "OTC" in asset_name:
+                categorized_assets["otc"].append(asset_name)
+                continue
             
-            return {
-                "uid": "USER_" + self.ssid[:8] if self.ssid else "UNKNOWN",
-                "demo_balance": demo_balance,
-                "live_balance": live_balance,
-                "last_updated": datetime.now(),
-                "connection_status": "connected" if self.is_connected else "disconnected"
+            # Use the 'type' field provided by the library for categorization
+            asset_type = asset_details.get('type', 'other').lower()
+            if asset_type in categorized_assets:
+                categorized_assets[asset_type].append(asset_name)
+            else:
+                categorized_assets["other"].append(asset_name)
+                
+        logging.info(f"Found {len(all_assets)} assets, categorized successfully.")
+        return categorized_assets
+        
+    def get_categorized_assets(self) -> dict:
+        """
+        Alias for get_assets() to maintain compatibility with main_app.py.
+        
+        Returns:
+            dict: A dictionary of categorized assets.
+        """
+        return self.get_assets()
+        
+    def get_candles(self, pair: str, timeframe: int = 60, count: int = 100) -> list:
+        """
+        Fetches candlestick data for a specific trading pair.
+        
+        Args:
+            pair (str): The trading pair to fetch candles for (e.g., "EURUSD").
+            timeframe (int): The timeframe in seconds (default: 60 for 1 minute).
+            count (int): The number of candles to retrieve (default: 100).
+            
+        Returns:
+            list: A list of dictionaries containing candlestick data, or None if failed.
+        """
+        if not self.api:
+            logging.warning("Cannot get candles, API not connected.")
+            return None
+            
+        try:
+            logging.info(f"Fetching {count} candles for {pair} at {timeframe}s timeframe...")
+            # Convert timeframe from seconds to the format expected by the API
+            interval_map = {
+                15: "15s",  # 15 seconds
+                60: "1m",   # 1 minute
+                180: "3m",  # 3 minutes
+                300: "5m",  # 5 minutes
+                900: "15m", # 15 minutes
+                3600: "1h", # 1 hour
+                14400: "4h" # 4 hours
             }
             
-        except Exception as e:
-            logger.error(f"خطأ في الحصول على معلومات الحساب: {e}")
-            return {}
-    
-    def disconnect(self):
-        """قطع الاتصال"""
-        try:
-            if self.client and hasattr(self.client, "disconnect"):
-                self.client.disconnect()
+            interval = interval_map.get(timeframe, "1m")  # Default to 1m if timeframe not in map
+            candles = self.api.get_chart_data(pair=pair, interval=interval, count=count)
             
-            self.is_connected = False
-            self.client = None
-            self.ssid = None
-            logger.info("تم قطع الاتصال")
+            if not candles:
+                logging.warning(f"No candle data returned for {pair}")
+                return None
+                
+            logging.info(f"Successfully fetched {len(candles)} candles for {pair}")
+            return candles
             
         except Exception as e:
-            logger.error(f"خطأ في قطع الاتصال: {e}")
-
-# مثال على الاستخدام
-if __name__ == "__main__":
-    # اختبار الواجهة
-    api = PocketOptionAPI()
-    
-    # محاولة الاتصال
-    test_ssid = "test_ssid_123456789"
-    if api.connect(test_ssid):
-        print("تم الاتصال بنجاح!")
-        
-        # الحصول على معلومات الحساب
-        account_info = api.get_account_info()
-        print(f"معلومات الحساب: {account_info}")
-        
-        # الحصول على الأصول المتاحة
-        assets = api.get_available_assets("OTC")
-        print(f"الأصول المتاحة: {assets[:5]}...")
-        
-        # الحصول على بيانات الشموع
-        if assets:
-            candles = api.get_candles(assets[0], count=10)
-            print(f"بيانات الشموع لـ {assets[0]}: {len(candles)} شمعة")
-        
-        # قطع الاتصال
-        api.disconnect()
-    else:
-        print("فشل في الاتصال!")
-
+            logging.error(f"Error fetching candles for {pair}: {str(e)}")
+            return None

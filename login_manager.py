@@ -2,7 +2,7 @@
 
 import tkinter as tk
 from tkinter import simpledialog, messagebox
-from BinaryOptionsToolsV2.pocketoption import syncronous
+from BinaryOptionsToolsV2.pocketoption import PocketOption
 
 class PocketOptionSession:
     def __init__(self):
@@ -20,13 +20,12 @@ class PocketOptionSession:
             return False
 
         try:
-            session = syncronous.PocketOption()
-            session.connect(ssid=ssid)
+            session = PocketOption(ssid=ssid)
 
             # التحقق من صحة الاتصال
             balance = session.get_balance()
-            uid = session.get_user_id()
-            acc_type = session.get_account_type()
+            uid = session.profile.id if session.profile else None
+            acc_type = "DEMO" if session.is_demo else "REAL"
 
             self.session = session
             self.account_data = {
